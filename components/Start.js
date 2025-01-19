@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import {
   ImageBackground,
@@ -9,13 +9,35 @@ import {
   TouchableOpacity,
   Platform,
   KeyboardAvoidingView,
+  Alert,
+  LogBox,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { getAuth, signInAnonymously } from 'firebase/auth';
+import backgroundImage from '../assets/background.png';
+
+LogBox.ignoreLogs(['AsyncStorage has been extracted from']);
 
 const Start = ({ navigation }) => {
+  const auth = getAuth();
   const [name, setName] = useState('');
   const [backgroundColor, setBackgroundColor] = useState('');
   const colors = ['#090C08', '#474056', '#8A95A5', '#B9C6AE'];
+
+  const signInUser = () => {
+    signInAnonymously(auth)
+      .then((result) => {
+        navigation.navigate('Chat', {
+          userID: result.user.uid,
+          name,
+          backgroundColor,
+        });
+        Alert.alert('Signed in Successfully');
+      })
+      .catch((error) => {
+        Alert.alert('Unable to sign in, try again later.');
+      });
+  };
 
   useEffect(() => {
     navigation.setOptions({
@@ -25,11 +47,6 @@ const Start = ({ navigation }) => {
     });
   }, [navigation]);
 
-  // Navigate to the Chat screen, passing name and color parameters
-  // const handleStartChat = () => {
-  //   navigation.navigate('Chat', { name, backgroundColor });
-  // };
-
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -37,10 +54,7 @@ const Start = ({ navigation }) => {
     >
       <View style={styles.container}>
         {/* Background Image */}
-        <ImageBackground
-          source={require('../assets/background.png')}
-          style={styles.background}
-        >
+        <ImageBackground source={backgroundImage} style={styles.background}>
           <View style={styles.contentContainer}>
             <Text style={styles.titleText}>Let's Chat</Text>
 
@@ -88,15 +102,7 @@ const Start = ({ navigation }) => {
               </View>
 
               {/* Start chat button */}
-              <TouchableOpacity
-                style={styles.button}
-                onPress={() =>
-                  navigation.navigate('Chat', {
-                    name: name || 'User',
-                    backgroundColor,
-                  })
-                }
-              >
+              <TouchableOpacity style={styles.button} onPress={signInUser}>
                 <Text style={styles.buttonText}>Start Chatting</Text>
               </TouchableOpacity>
             </View>
