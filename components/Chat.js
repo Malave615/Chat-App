@@ -5,8 +5,10 @@ import {
   KeyboardAvoidingView,
   Text,
   ActivityIndicator,
+  Alert,
+  TouchableOpacity,
 } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { Bubble, GiftedChat } from 'react-native-gifted-chat';
 import {
@@ -21,6 +23,9 @@ const Chat = ({ route, db, navigation }) => {
   const { userID, name, backgroundColor } = route.params || {};
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
+
+  const unsubMessages = useRef(null);
 
   useEffect(() => {
     navigation.setOptions({
@@ -29,35 +34,57 @@ const Chat = ({ route, db, navigation }) => {
     });
   }, [userID, db]);
 
-  let unsubMessages;
-
   useEffect(() => {
-    if (unsubMessages) unsubMessages();
-    unsubMessages = null;
+    if (unsubMessages.current) {
+      unsubMessages.current();
+    }
 
     const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'));
-    unsubMessages = onSnapshot(q, (docs) => {
-      const newMessages = [];
-      docs.forEach((doc) => {
-        newMessages.push({
-          _id: doc.id,
-          ...doc.data(),
-          createdAt: new Date(doc.data().createdAt.toMillis()),
+    unsubMessages.current = onSnapshot(
+      q,
+      (docs) => {
+        const newMessages = [];
+        docs.forEach((doc) => {
+          newMessages.push({
+            _id: doc.id,
+            ...doc.data(),
+            createdAt: new Date(doc.data().createdAt.toMillis()),
+          });
         });
-      });
-      setIsLoading(false);
-      setMessages(newMessages);
-    });
+
+        setIsLoading(false);
+        setMessages(newMessages);
+        setNetworkError(false); // Reset error state
+      },
+      (error) => {
+        console.error('Error fetching messages: ', error);
+        setIsLoading(false);
+        setNetworkError(true);
+      },
+    );
 
     // Clean up code
     return () => {
-      if (unsubMessages) unsubMessages();
+      if (unsubMessages.current) {
+        unsubMessages.current();
+      }
     };
   }, []);
 
   // Function to save sent messages to Firestore db
   const onSend = async (newMessages = []) => {
     const message = newMessages[0];
+
+    // Input validation: Check for empty message or overly long text
+    if (!message.text.trim()) {
+      Alert.alert('Please enter a message');
+      return;
+    }
+
+    if (message.text.length > 200) {
+      Alert.alert('Message is too long! Please keep it under 200 characters.');
+      return;
+    }
 
     // Construct message object with necessary fields
     const messageObject = {
@@ -86,6 +113,7 @@ const Chat = ({ route, db, navigation }) => {
       setMessages((previousMessages) => [newMessage, ...previousMessages]);
     } catch (error) {
       console.error('Error sending message: ', error);
+      Alert.alert('Error', 'Unable to send message. Please try again later.');
     }
   };
 
@@ -125,7 +153,24 @@ const Chat = ({ route, db, navigation }) => {
               _id: userID, // userID from route.params
               name,
             }}
+            inverted={true} // Automatically reverse the messages in the UI
           />
+        )}
+
+        {/* Show error message and retry button if network error occurs */}
+        {networkError && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>
+              Error fetching messages. Please check your network connection.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setNetworkError(false);
+              }}
+            >
+              <Text style={styles.retryButton}>Retry</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </KeyboardAvoidingView>
@@ -152,6 +197,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  errorContainer: {
+    position: 'absolute',
+    top: 20,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(225, 0, 0, 0.5)',
+    padding: 10,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  retryButton: {
+    color: '#fff',
+    fontSize: 16,
+    textDecorationLine: 'underline',
   },
 });
 
