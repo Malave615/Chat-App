@@ -7,13 +7,15 @@ import {
   disableNetwork,
   enableNetwork,
 } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useEffect } from 'react';
-import { Alert } from 'react-native';
+import { Alert, LogBox } from 'react-native';
 import Start from './components/Start';
 import Chat from './components/Chat';
+
+LogBox.ignoreLogs(['AsyncStorage has been extracted from']);
 
 // Create the navigator
 const Stack = createNativeStackNavigator();
@@ -35,7 +37,7 @@ const app =
 // Initialize Firestore and Auth
 const db = getFirestore(app);
 const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage),
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
 });
 
 const App = () => {

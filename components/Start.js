@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import {
   ImageBackground,
@@ -10,13 +10,11 @@ import {
   Platform,
   KeyboardAvoidingView,
   Alert,
-  LogBox,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import backgroundImage from '../assets/background.png';
-
-LogBox.ignoreLogs(['AsyncStorage has been extracted from']);
 
 const Start = ({ navigation }) => {
   const auth = getAuth();
@@ -24,28 +22,59 @@ const Start = ({ navigation }) => {
   const [backgroundColor, setBackgroundColor] = useState('');
   const colors = ['#090C08', '#474056', '#8A95A5', '#B9C6AE'];
 
-  const signInUser = () => {
-    signInAnonymously(auth)
-      .then((result) => {
-        navigation.navigate('Chat', {
-          userID: result.user.uid,
-          name,
-          backgroundColor,
-        });
-        Alert.alert('Signed in Successfully');
-      })
-      .catch((error) => {
-        Alert.alert('Unable to sign in, try again later.');
-      });
+  // Load user data (name) from AsyncStorage
+  const loadUserData = async () => {
+    try {
+      const storedName = await AsyncStorage.getItem('userName');
+      if (storedName) {
+        setName(storedName);
+      }
+    } catch (error) {
+      console.log('Error loading user name from storage: ', error);
+    }
   };
 
+  // Check if user is authenticated
+  const checkAuthState = useCallback(() => {
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const storedName = await AsyncStorage.getItem('userName');
+        setName(storedName || '');
+        navigation.navigate('Chat', {
+          userID: user.uid,
+          name: storedName || 'Anonymous',
+          backgroundColor,
+        });
+      }
+    });
+  }, [auth, backgroundColor, navigation]);
+
   useEffect(() => {
+    checkAuthState();
+    loadUserData();
+
     navigation.setOptions({
       title: 'Welcome',
       headerTitleStyle: styles.headerTitle,
       headerStyle: { backgroundColor: '#090C08' },
     });
-  }, [navigation]);
+  }, [checkAuthState, navigation]);
+
+  const signInUser = async () => {
+    try {
+      const result = await signInAnonymously(auth);
+      await AsyncStorage.setItem('userName', name);
+
+      navigation.navigate('Chat', {
+        userID: result.user.uid,
+        name,
+        backgroundColor,
+      });
+      Alert.alert('Signed in Successfully');
+    } catch (error) {
+      Alert.alert('Unable to sign in, try again later.');
+    }
+  };
 
   return (
     <KeyboardAvoidingView

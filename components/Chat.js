@@ -37,35 +37,34 @@ const Chat = ({ route, db, navigation, isConnected }) => {
   }, [name, backgroundColor, navigation]);
 
   useEffect(() => {
-    if (unsubMessages.current) {
-      unsubMessages.current();
-    }
+    if (isConnected) {
+      if (unsubMessages.current) unsubMessages.current();
+      unsubMessages.current = null;
 
-    if (isConnected === true) {
       const q = query(
         collection(db, 'messages'),
         orderBy('createdAt', 'desc'),
         where('uid', '==', userID),
       );
-      unsubMessages.current = onSnapshot(q, (docs) => {
+
+      unsubMessages.current = onSnapshot(q, (documentsSnapshot) => {
         const newMessages = [];
-        docs.forEach((doc) => {
-          const newMessage = {
+        documentsSnapshot.forEach((doc) => {
+          newMessages.push({
             _id: doc.id,
-            ...doc.data(),
-            createdAt: new Date(doc.data().createdAt.toMillis()),
+            text: doc.data().text,
+            createdAt: doc.data().createdAt.toDate(),
+            uid: doc.data().uid,
+            name: doc.data().name,
             user: {
               _id: doc.data().uid,
               name: doc.data().name,
             },
-          };
-          console.log('New message ID: ', newMessage._id);
-          newMessages.push(newMessage);
+          });
         });
         cacheMessages(newMessages);
-        setIsLoading(false);
         setMessages(newMessages);
-        setNetworkError(false); // Reset error state
+        setIsLoading(false);
       });
     } else {
       loadCachedMessages();
@@ -73,19 +72,12 @@ const Chat = ({ route, db, navigation, isConnected }) => {
 
     // Clean up code
     return () => {
-      if (unsubMessages.current) {
-        unsubMessages.current();
-      }
+      if (unsubMessages.current) unsubMessages.current();
     };
-  }, [isConnected, db, userID, name]);
+  }, [isConnected, db, userID]);
 
   const cacheMessages = async (messagesToCache) => {
     try {
-      if (!messagesToCache) {
-        console.log('No messages to cache');
-        return;
-      }
-      console.log('Caching messages: ', messagesToCache);
       await AsyncStorage.setItem('messages', JSON.stringify(messagesToCache));
     } catch (error) {
       console.log('Error caching messages: ', error.message);
@@ -94,27 +86,13 @@ const Chat = ({ route, db, navigation, isConnected }) => {
   };
 
   const loadCachedMessages = async () => {
-    try {
-      const cachedMessages = await AsyncStorage.getItem('messages');
-      if (cachedMessages) {
-        const parsedMessages = JSON.parse(cachedMessages);
-        const validMessages = parsedMessages.filter(msg => msg._id);
-        if (validMessages.length > 0) {
-          const uniqueMessages = validMessages.filter(
-            (msg, index, self) =>
-              index === self.findIndex((m) => m._id ===msg._id),
-          );
-          setMessages(uniqueMessages);
-        } else {
-          setMessages([]); // No valid cached messages
-        }
-      } else {
-        setMessages([]); // No cached messages found
-      }
-    } catch (error) {
-      console.log('Error loading cached messages: ', error.message);
+    const cachedMessages = await AsyncStorage.getItem('messages');
+    if (cachedMessages) {
+      setMessages(JSON.parse(cachedMessages));
+    } else {
       setMessages([]);
     }
+    setIsLoading(false);
   };
 
   // Function to save sent messages to Firestore db
@@ -134,10 +112,15 @@ const Chat = ({ route, db, navigation, isConnected }) => {
 
     // Construct message object with necessary fields
     const messageObject = {
+      _id: message._id,
       text: message.text,
       createdAt: new Date(),
       uid: userID,
       name: message.user.name,
+      user: {
+        _id: userID,
+        name: message.user.name,
+      },
     };
 
     try {
@@ -161,6 +144,19 @@ const Chat = ({ route, db, navigation, isConnected }) => {
       console.error('Error sending message: ', error);
       Alert.alert('Error', 'Unable to send message. Please try again later.');
     }
+  };
+
+  // Function to render InputToolbar
+  const renderInputToolbar = (props) => {
+    if (!isConnected) {
+      return (
+        <InputToolbar
+          {...props}
+          containerStyle={{ borderTopWidth: 0 }} // Hide the input area
+        />
+      );
+    }
+    return <InputToolbar {...props} />; // Show the input area
   };
 
   // Function to customize chat bubble color
@@ -192,7 +188,7 @@ const Chat = ({ route, db, navigation, isConnected }) => {
           </View>
         ) : (
           <>
-            {/* Only reder GiftedChat when connected */}
+            {/* Only render GiftedChat when connected */}
             {isConnected ? (
               <GiftedChat
                 messages={messages}
@@ -204,9 +200,7 @@ const Chat = ({ route, db, navigation, isConnected }) => {
                 }}
                 inverted // Automatically reverse the messages in the UI
                 isSendButtonDisabled={!isConnected} // Disable send button if offline
-                renderInputToolbar={
-                  (props) => (isConnected ? <InputToolbar {...props} /> : null) // Prevent toolbar from rendering if offline
-                }
+                renderInputToolbar={renderInputToolbar}
               />
             ) : (
               <Text style={styles.noConnectionText}>
