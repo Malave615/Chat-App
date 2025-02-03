@@ -1,14 +1,15 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import { getApps, initializeApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import {
   getFirestore,
   disableNetwork,
   enableNetwork,
 } from 'firebase/firestore';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { useNetInfo } from '@react-native-community/netinfo';
 import { useEffect } from 'react';
 import { Alert, LogBox } from 'react-native';
@@ -31,14 +32,15 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore and Auth
-const db = getFirestore(app);
+// Initialize Firebase Auth with persistence
 const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+  persistence: getReactNativePersistence(AsyncStorage),
 });
+
+// Initialize Firestore
+const db = getFirestore(app);
 
 const App = () => {
   const connectionStatus = useNetInfo();

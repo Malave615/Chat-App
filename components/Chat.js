@@ -65,38 +65,51 @@ const Chat = ({ route, db, navigation, isConnected }) => {
         cacheMessages(newMessages);
         setMessages(newMessages);
         setIsLoading(false);
+        setNetworkError(false);
       });
     } else {
       loadCachedMessages();
+      setNetworkError(true);
+      console.log('Offline, loading cached messages');
     }
 
     // Clean up code
     return () => {
       if (unsubMessages.current) unsubMessages.current();
     };
-  }, [isConnected, db, userID]);
+  }, [isConnected]);
 
   const cacheMessages = async (messagesToCache) => {
     try {
       await AsyncStorage.setItem('messages', JSON.stringify(messagesToCache));
+      console.log('Caching messages: ', messagesToCache);
     } catch (error) {
       console.log('Error caching messages: ', error.message);
       Alert.alert('Error', 'Unable to cache messages. Please try again later.');
     }
   };
 
+  // Function to load cached messages from AsyncStorage
   const loadCachedMessages = async () => {
-    const cachedMessages = await AsyncStorage.getItem('messages');
-    if (cachedMessages) {
-      setMessages(JSON.parse(cachedMessages));
-    } else {
+    try {
+      const cachedMessages = (await AsyncStorage.getItem('messages')) || [];
+      if (cachedMessages) {
+        console.log('Loaded cached messages: ', JSON.parse(cachedMessages));
+        setMessages(JSON.parse(cachedMessages));
+      } else {
+        console.log('No cached messages found');
+        setMessages([]);
+      }
+    } catch (error) {
+      console.log('Error loading cached messages: ', error.message);
       setMessages([]);
     }
     setIsLoading(false);
   };
 
-  // Function to save sent messages to Firestore db
-  const onSend = async (newMessages = []) => {
+  // Function to handle sending messages
+  const onSend = (newMessages) => {
+    addDoc(collection(db, 'messages'), newMessages[0]);
     const message = newMessages[0];
 
     // Input validation: Check for empty message or overly long text
@@ -125,7 +138,7 @@ const Chat = ({ route, db, navigation, isConnected }) => {
 
     try {
       // Add the constructed message object to Firestore
-      const docRef = await addDoc(collection(db, 'messages'), messageObject);
+      const docRef = addDoc(collection(db, 'messages'), messageObject);
 
       // After message is added, update the messages state
       const newMessage = {
@@ -140,6 +153,7 @@ const Chat = ({ route, db, navigation, isConnected }) => {
 
       // Update state with new message
       setMessages((previousMessages) => [newMessage, ...previousMessages]);
+      cacheMessages([newMessage, ...messages]);
     } catch (error) {
       console.error('Error sending message: ', error);
       Alert.alert('Error', 'Unable to send message. Please try again later.');
@@ -148,15 +162,10 @@ const Chat = ({ route, db, navigation, isConnected }) => {
 
   // Function to render InputToolbar
   const renderInputToolbar = (props) => {
-    if (!isConnected) {
-      return (
-        <InputToolbar
-          {...props}
-          containerStyle={{ borderTopWidth: 0 }} // Hide the input area
-        />
-      );
+    if (isConnected) {
+      return <InputToolbar {...props} />;
     }
-    return <InputToolbar {...props} />; // Show the input area
+    return null; // Hide InputToolbar if offline
   };
 
   // Function to customize chat bubble color
@@ -188,21 +197,20 @@ const Chat = ({ route, db, navigation, isConnected }) => {
           </View>
         ) : (
           <>
+            <GiftedChat
+              messages={messages}
+              renderBubble={renderBubble}
+              onSend={(newMessages) => onSend(newMessages)}
+              user={{
+                _id: userID, // userID from route.params
+                name,
+              }}
+              inverted // Automatically reverse the messages in the UI
+              isSendButtonDisabled={!isConnected} // Disable send button if offline
+              renderInputToolbar={renderInputToolbar}
+            />
             {/* Only render GiftedChat when connected */}
-            {isConnected ? (
-              <GiftedChat
-                messages={messages}
-                renderBubble={renderBubble}
-                onSend={(newMessages) => onSend(newMessages)}
-                user={{
-                  _id: userID, // userID from route.params
-                  name,
-                }}
-                inverted // Automatically reverse the messages in the UI
-                isSendButtonDisabled={!isConnected} // Disable send button if offline
-                renderInputToolbar={renderInputToolbar}
-              />
-            ) : (
+            {!isConnected && (
               <Text style={styles.noConnectionText}>
                 You are offline. Cannot send messages at this time.
               </Text>
