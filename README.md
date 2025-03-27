@@ -10,6 +10,7 @@ This **Chat-App** is built with **React-Native** and Expo and is responsive on A
 4. [Setup and Installation](#setup-and-installation)
 5. [Testing](#testing)
 6. [License](#license)
+7. [Author](#author)
 
 ## Project Overview
 
@@ -80,3 +81,9 @@ OR
 ## License
 
 This project is licensed under the MIT license.
+
+## Author
+
+Tracy Malavé
+[Github Profile]
+(https://github.com/Malave615)
